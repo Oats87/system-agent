@@ -23,6 +23,7 @@ type AgentConfig struct {
 	AgentRegistriesFile           string `json:"agentRegistriesFile,omitempty"`
 	ImageCredentialProviderConfig string `json:"imageCredentialProviderConfig,omitempty"`
 	ImageCredentialProviderBinDir string `json:"imageCredentialProviderBinDirectory,omitempty"`
+	MarkerDir                     string `json:"markerDirectory,omitempty"`
 }
 
 type ConnectionInfo struct {
