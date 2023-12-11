@@ -47,6 +47,7 @@ fi
 FALLBACK=v0.2.9
 CACERTS_PATH=cacerts
 RETRYCOUNT=4500
+APPLYINATOR_ACTIVE_WAIT_COUNT=60
 
 # info logs the given argument at info log level.
 info() {
@@ -832,6 +833,19 @@ create_env_file() {
     done
 }
 
+ensure_applyinator_not_active() {
+    i=1
+    while [ "${i}" -ne "${APPLYINATOR_ACTIVE_WAIT_COUNT}" ]; do
+      if [ -f "${CATTLE_AGENT_VAR_DIR}/applyinator-active" ]; then
+        i=$((i + 1))
+        info "Active plan reconciliation detected. Sleeping for 5 seconds and retrying check"
+        sleep 5
+        continue
+      fi
+      break
+    done
+}
+
 do_install() {
     if [ $(id -u) != 0 ]; then
       fatal "This script must be run as root."
@@ -842,6 +856,8 @@ do_install() {
     setup_env
     ensure_directories
     verify_downloader curl || fatal "can not find curl for downloading files"
+
+    ensure_applyinator_not_active
 
     if [ -n "${CATTLE_CA_CHECKSUM}" ]; then
         validate_ca_required

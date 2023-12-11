@@ -92,6 +92,9 @@ const defaultCommand = "/run.sh"
 const cattleAgentExecutionPwdEnvKey = "CATTLE_AGENT_EXECUTION_PWD"
 const cattleAgentAttemptKey = "CATTLE_AGENT_ATTEMPT_NUMBER"
 const planRetentionPolicyCount = 64
+const restartPendingTimeout = "5m"
+const restartPendingMarkerFile = "restart-pending"
+const applyinatorActiveMarkerFile = "applyinator-active"
 
 func NewApplyinator(workDir string, preserveWorkDir bool, appliedPlanDir string, imageUtil *image.Utility) *Applyinator {
 	return &Applyinator{
@@ -154,6 +157,54 @@ func (a *Applyinator) Apply(ctx context.Context, input ApplyInput) (ApplyOutput,
 	now := time.Now()
 	nowUnixTimeString := now.Format(time.UnixDate)
 	nowString := now.Format(applyinatorDateCodeLayout)
+
+	// Check to see if we are safe to apply.
+	restartPendingMarkerFilePath := filepath.Join(a.workDir, restartPendingMarkerFile)
+	if _, err := os.Stat(restartPendingMarkerFilePath); err == nil {
+		// check the restart pending marker file to see if we've passed our threshold for blocking
+		fileContents, err := os.ReadFile(restartPendingMarkerFilePath)
+		if err != nil {
+			return output, fmt.Errorf("unable to read restart pending marker file %s: %w", restartPendingMarkerFile, err)
+		} else {
+			if len(fileContents) == 0 {
+				// Write "now" as the first observed time of the file.
+				if err := os.WriteFile(restartPendingMarkerFile, []byte(nowUnixTimeString), 0644); err != nil {
+					return output, fmt.Errorf("unable to write first-observed time to restart pending marker file %s: %w", restartPendingMarkerFile, err)
+				}
+				return output, fmt.Errorf("restart is pending for system-agent")
+			} else {
+				// Parse the time out of the file and determine if we have passed our time threshold
+				t, err := time.Parse(time.UnixDate, string(fileContents))
+				if err != nil {
+					return output, fmt.Errorf("unable to parse first-observed time in restart pending marker file %s: %w", restartPendingMarkerFile, err)
+				}
+				maxRestartPendingWait, err := time.ParseDuration(restartPendingTimeout)
+				if now.Before(t.Add(maxRestartPendingWait)) {
+					return output, fmt.Errorf("restart is pending for system-agent")
+				}
+				// remove the restart pending file
+				err = os.Remove(restartPendingMarkerFile)
+				if err != nil {
+					logrus.Errorf("error encountered while removing restart pending marker file %s: %v", restartPendingMarkerFilePath, err)
+				}
+			}
+		}
+	}
+
+	// Create the Applyinator Active Marker File
+	applyinatorActiveMarkerFilePath := filepath.Join(a.workDir, applyinatorActiveMarkerFile)
+	err := os.WriteFile(applyinatorActiveMarkerFilePath, []byte(nowUnixTimeString), 0600)
+	if err != nil {
+		logrus.Errorf("unable to write applyinator active marker file %s: %v", applyinatorActiveMarkerFilePath, err)
+	}
+	defer func() {
+		// Remove the Applyinator Active Marker File
+		err = os.Remove(applyinatorActiveMarkerFilePath)
+		if err != nil {
+			logrus.Errorf("unable to remove applyinator active marker file %s: %v", applyinatorActiveMarkerFilePath, err)
+		}
+	}()
+
 	executionDir := filepath.Join(a.workDir, nowString)
 	logrus.Tracef("[Applyinator] Applying calculated node plan contents %v", input.CalculatedPlan.Checksum)
 	logrus.Tracef("[Applyinator] Using %s as execution directory", executionDir)
