@@ -396,7 +396,7 @@ setup_env() {
       if [ -n "${STRICT_VERIFY}" ]; then
         CATTLE_AGENT_STRICT_VERIFY=${STRICT_VERIFY}
       fi
-      info "Strict verification is set to ${CATTLE_AGENT_STRICT_VERIFY}"
+      info "CA strict verification is set to ${CATTLE_AGENT_STRICT_VERIFY}"
     fi
 
     if [ -z "${CATTLE_AGENT_CONFIG_DIR}" ]; then
@@ -884,6 +884,9 @@ do_install() {
     touch ${CATTLE_AGENT_VAR_DIR}/interlock/restart-pending
     ensure_applyinator_not_active
 
+    if [ -z "${CATTLE_CA_CHECKSUM}" ] && [ $(echo "${CATTLE_AGENT_STRICT_VERIFY}" | tr '[:upper:]' '[:lower:]') == "true" ]; then
+      fatal "Aborting system-agent installation due to requested strict CA verification with no CA checksum provided"
+    fi
     if [ -n "${CATTLE_CA_CHECKSUM}" ]; then
         validate_ca_required
     fi
