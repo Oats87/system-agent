@@ -887,7 +887,7 @@ do_install() {
     if [ -z "${CATTLE_CA_CHECKSUM}" ] && [ $(echo "${CATTLE_AGENT_STRICT_VERIFY}" | tr '[:upper:]' '[:lower:]') = "true" ]; then
       fatal "Aborting system-agent installation due to requested strict CA verification with no CA checksum provided"
     fi
-    if [ -n "${CATTLE_CA_CHECKSUM}" ]; then
+    if [ -n "${CATTLE_CA_CHECKSUM}" && [ $(echo "${CATTLE_AGENT_STRICT_VERIFY}" | tr '[:upper:]' '[:lower:]') != "true" ]; then
         validate_ca_required
     fi
     validate_ca_checksum
